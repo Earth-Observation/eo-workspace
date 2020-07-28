@@ -19,7 +19,7 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
-if [ -z "$USER_GID" ]; then
+if [ -z "$NB_GID" ]; then
     echo "Please set a user GID via USER_GID env varibale."
     exit 1
 fi
@@ -27,10 +27,10 @@ fi
 for d in $@; do
   find "$d" \
     ! \( \
-      -group $USER_GID \
+      -group $NB_GID \
       -a -perm -g+rwX  \
     \) \
-    -exec chgrp $USER_GID {} \; \
+    -exec chgrp $NB_GID {} \; \
     -exec chmod g+rwX {} \;
   # setuid,setgid *on directories only*
   find "$d" \
