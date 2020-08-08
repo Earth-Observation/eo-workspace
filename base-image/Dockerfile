@@ -59,8 +59,10 @@ RUN \
         ca-certificates \
         sudo \
         locales \
+        git \
         fonts-liberation \
-        run-one && \
+        run-one \
+        apt-utils && \
     apt-get install -y locales && \
     # install locales-all?
     sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
@@ -209,131 +211,6 @@ RUN \
     # Cleanup
     clean-layer.sh
 
-RUN \
-    # TODO add repos?
-    # add-apt-repository ppa:apt-fast/stable
-    # add-apt-repository 'deb http://security.ubuntu.com/ubuntu xenial-security main'
-    apt-get update --fix-missing && \
-    apt-get install -y apt-utils && \
-    apt-get upgrade -y && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        # This is necessary for apt to access HTTPS sources: 
-        apt-transport-https \
-        gnupg-agent \
-        gpg-agent \
-        gnupg2 \
-        ca-certificates \
-        build-essential \
-        pkg-config \
-        software-properties-common \
-        lsof \
-        net-tools \
-        libcurl4 \
-        curl \
-        wget \
-        cron \
-        openssl \
-        iproute2 \
-        psmisc \
-        tmux \
-        dpkg-sig \
-        uuid-dev \
-        csh \
-        xclip \
-        clinfo \
-        libgdbm-dev \
-        libncurses5-dev \
-        gawk \
-        # Simplified Wrapper and Interface Generator (5.8MB) - required by lots of py-libs
-        swig \
-        # Graphviz (graph visualization software) (4MB)
-        graphviz libgraphviz-dev \
-        # Terminal multiplexer
-        screen \
-        # Editor
-        nano \
-        # Find files
-        locate \
-        # Dev Tools
-        sqlite3 \
-        # XML Utils
-        xmlstarlet \
-        #  R*-tree implementation - Required for earthpy, geoviews (3MB)
-        libspatialindex-dev \
-        # Search text and binary files
-        yara \
-        # Minimalistic C client for Redis
-        libhiredis-dev \
-        # postgresql client
-        libpq-dev \
-        # mysql client (10MB)
-        libmysqlclient-dev \
-        # mariadb client (7MB)
-        # libmariadbclient-dev \
-        # image processing library (6MB), required for tesseract
-        libleptonica-dev \
-        # GEOS library (3MB)
-        libgeos-dev \
-        # style sheet preprocessor
-        less \
-        # Print dir tree
-        tree \
-        # Bash autocompletion functionality
-        bash-completion \
-        # ping support
-        iputils-ping \
-        # Json Processor
-        jq \
-        rsync \
-        # VCS:
-        git \
-        subversion \
-        jed \
-        # odbc drivers
-        unixodbc unixodbc-dev \
-        # Image support
-        libtiff-dev \
-        libjpeg-dev \
-        libpng-dev \
-        # TODO: no 18.04 installation candidate: libjasper-dev \
-        libglib2.0-0 \
-        libxext6 \
-        libsm6 \
-        libxext-dev \
-        libxrender1 \
-        libzmq3-dev \
-        # protobuffer support
-        protobuf-compiler \
-        libprotobuf-dev \
-        libprotoc-dev \
-        autoconf \
-        automake \
-        libtool \
-        cmake  \
-        fonts-liberation \
-        google-perftools \
-        # Compression Libs
-        # also install rar/unrar? but both are propriatory or unar (40MB)
-        zip \
-        gzip \
-        unzip \
-        bzip2 \
-        lzop \
-        bsdtar \
-        zlibc \
-        # unpack (almost) everything with one command
-        unp \
-        libbz2-dev \
-        liblzma-dev \
-        zlib1g-dev && \
-    chmod -R a+rwx /usr/local/bin/ && \
-    # configure dynamic linker run-time bindings
-    ldconfig && \
-    # Fix permissions
-    fix-permissions.sh $HOME && \
-    # Cleanup
-    clean-layer
 
 # prepare ssh for inter-container communication for remote python kernel
 RUN \
@@ -373,22 +250,56 @@ ENV JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
 
 ### END RUNTIMES ###
 
+########### OpeResty Install
+# https://github.com/IntimateMerger/docker-openresty/blob/master/Dockerfile
+# Docker Build Arguments
+ARG RESTY_IMAGE_TAG
+ARG RESTY_VERSION="1.17.8.2"
+#ARG RESTY_OPENSSL_VERSION="1.1.1c"
+#ARG RESTY_PCRE_VERSION="8.43"
+ARG RESTY_J="nproc"
+
+# These are not intended to be user-specified
+ARG _RESTY_CONFIG_OPTIONS="\
+    --with-http_stub_status_module \
+    --with-http_sub_module \
+    "
+ARG RESTY_CONFIG_OPTIONS=""
+
 RUN \
-    OPEN_RESTY_VERSION="1.17.8.2" && \
+    apt-get update && \
+    apt-get install -y \
+        libpcre3-dev \
+        libssl-dev \
+        perl \
+        make \
+        software-properties-common \
+        build-essential \
+        # also install rar/unrar? but both are propriatory or unar (40MB)
+        zip \
+        gzip \
+        unzip \
+        bzip2 \
+        lzop \
+        bsdtar \
+        zlibc && \
+    OPEN_RESTY_VERSION=${RESTY_VERSION} && \
     mkdir $RESOURCES_PATH"/openresty" && \
     cd $RESOURCES_PATH"/openresty" && \
     apt-get update && \
     apt-get purge -y nginx nginx-common && \
     # libpcre required, otherwise you get a 'the HTTP rewrite module requires the PCRE library' error
     # Install apache2-utils to generate user:password file for nginx.
-    apt-get install -y libssl-dev libpcre3 libpcre3-dev apache2-utils && \
+    apt-get install -y libssl-dev libpcre3 libpcre3-dev apache2-utils zlib1g zlib1g-dev  && \
     wget --quiet https://openresty.org/download/openresty-$OPEN_RESTY_VERSION.tar.gz  -O ./openresty.tar.gz && \
     tar xfz ./openresty.tar.gz && \
     rm ./openresty.tar.gz && \
     cd ./openresty-$OPEN_RESTY_VERSION/ && \
     # Surpress output - if there is a problem remove  > /dev/null
-    ./configure --with-http_stub_status_module --with-http_sub_module > /dev/null && \
-    make -j2 > /dev/null && \
+    # ./configure --with-http_stub_status_module --with-http_sub_module > /dev/null && \
+    eval ./configure -j"$(${RESTY_J})" ${_RESTY_CONFIG_OPTIONS} ${RESTY_CONFIG_OPTIONS} ${RESTY_LUAJIT_OPTIONS} && \
+    # make -j2 > /dev/null && \
+    make -j"$(${RESTY_J})" && \
     make install > /dev/null && \
     # create log dir and file - otherwise openresty will throw an error
     mkdir -p /var/log/nginx/ && \
@@ -595,132 +506,6 @@ RUN \
 # Data science libraries requirements
 COPY resources/libraries ${RESOURCES_PATH}/libraries
 
-### Install main data science libs
-RUN \ 
-    # Link Conda - All python are linke to the conda instances 
-    # Linking python 3 crashes conda -> cannot install anyting - remove instead
-    #ln -s -f $CONDA_DIR/bin/python /usr/bin/python3 && \
-    # if removed -> cannot use add-apt-repository
-    # rm /usr/bin/python3 && \
-    # rm /usr/bin/python3.5
-    ln -s -f $CONDA_DIR/bin/python /usr/bin/python && \
-    apt-get update && \
-    # upgrade pip
-    pip install --upgrade pip && \
-    # If minimal flavor - install 
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        # Install nomkl - mkl needs lots of space
-        conda install -y nomkl ; \
-    else \
-        # Install mkl for faster computations
-        conda install -y  'mkl=2020.*' ; \
-    fi && \
-    # Install some basics - required to run container
-    conda install -y \
-            tqdm \
-            pyzmq \
-            cython \
-            graphviz \
-            numpy \
-            matplotlib \
-            'scipy=1.4.1' \
-            requests \
-            'urllib3<1.25' \
-            pandas \
-            six \
-            future \
-            protobuf \
-            zlib \
-            boost \
-            psutil \
-            PyYAML \
-            python-crontab \
-            ipykernel \
-            cmake \
-            joblib \
-            Pillow \
-            #'ipython=7.11.*' \
-            'notebook=6.0.*' \
-            'jupyterlab=2.1.5' \
-            # Selected by library evaluation
-            networkx \
-            click \
-            docutils \
-            imageio \
-            tabulate \
-            flask \
-            dill \
-            regex \
-            toolz \
-            jmespath && \
-    # Install minimal pip requirements
-    pip install --no-cache-dir --upgrade -r ${RESOURCES_PATH}/libraries/requirements-minimal.txt && \
-    # If minimal flavor - exit here
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        # Remove pandoc - package for markdown conversion - not needed
-        conda remove -y --force pandoc && \
-        # Fix permissions
-        fix-permissions.sh $CONDA_DIR && \
-        # Cleanup
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
-    # OpenMPI support
-    apt-get install -y --no-install-recommends libopenmpi-dev openmpi-bin && \
-    # conda install -c conda-forge openmpi
-    # Install mkl, mkl-include & mkldnn
-    echo "Install Conda mkl-include" && \
-    conda install -y mkl-include && \
-    # TODO - Install was not working conda install -y -c mingfeima mkldnn && \
-    # Install numba
-    echo "Install Conda numba" && \
-    conda install -y numba && \
-    # Install tensorflow - cpu only -  mkl support
-    echo "Install Conda tensorflow" && \
-    # conda install -y 'tensorflow=2.*' && \
-    pip install tensorflow==2.* && \
-#    conda install -y -c anaconda 'tensorflow=2.0.*' tensorboard && \
-    # Install pytorch - cpu only
-    echo "Install Conda pytorch" && \
-    conda install -y -c pytorch "pytorch==1.4.*" torchvision cpuonly && \
-    # Install light pip requirements
-    echo "Install pip light-requirements" && \
-    pip install --no-cache-dir --upgrade -r ${RESOURCES_PATH}/libraries/requirements-light.txt && \
-    # If light light flavor - exit here
-    if [ "$WORKSPACE_FLAVOR" = "light" ]; then \
-        # Fix permissions
-        fix-permissions.sh $CONDA_DIR && \
-        # Cleanup
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
-    # libartals == 40MB liblapack-dev == 20 MB
-    apt-get install -y --no-install-recommends liblapack-dev libatlas-base-dev libeigen3-dev libblas-dev && \
-    # pandoc -> installs libluajit -> problem for openresty
-    # HDF5 (19MB)
-    apt-get install -y libhdf5-dev && \
-    # conda install -y hdf5 && \
-    # required for tesseract: 11MB - tesseract-ocr-dev?
-    apt-get install -y libtesseract-dev && \
-    # conda install -y tesseract && \
-    # conda install tesseract
-    # Install libjpeg turbo for speedup in image processing
-    echo "Install Conda libjpeg" && \
-    # conda install -y libjpeg-turbo && \
-    pip install PyTurboJPEG && \
-    # Faiss - A library for efficient similarity search and clustering of dense vectors. 
-    echo "Install Conda faiss-cpu" && \
-    conda install -y -c pytorch faiss-cpu && \
-    # Install full pip requirements
-    echo "Install pip full-requirements" && \
-    pip install --no-cache-dir --upgrade -r ${RESOURCES_PATH}/libraries/requirements-full.txt && \
-    # Setup Spacy
-    # Spacy - download and large language removal
-    python -m spacy download en && \
-    # Fix permissions
-    fix-permissions.sh $CONDA_DIR && \
-    # Cleanup
-    clean-layer.sh
 
 # Fix conda version
 # RUN \
@@ -730,157 +515,6 @@ RUN \
 
 ### END DATA SCIENCE BASICS ###
 
-### INCUBATION ZONE ### 
-
-RUN \
-    apt-get update && \
-    # Newer jedi makes trouble with jupyterlab-lsp
-    # pip install --no-cache-dir jedi==0.15.2 && \
-    # conda install -c conda-forge jedi xeus-python && \
-    echo "Install pip jedi" && \
-    pip install --no-cache-dir jedi==0.15.2 && \
-    # required by rodeo ide (8MB)
-    # apt-get install -y libgconf2-4 && \
-    # required for pvporcupine (800kb)
-    # apt-get install -y portaudio19-dev && \
-    # Audio drivers for magenta? (3MB)
-    # apt-get install -y libasound2-dev libjack-dev && \
-    # libproj-dev required for cartopy (15MB)
-    # apt-get install -y libproj-dev && \
-    # mysql server: 150MB 
-    # apt-get install -y mysql-server && \
-   # If minimal or light flavor -> exit here
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ] || [ "$WORKSPACE_FLAVOR" = "light" ]; then \
-        exit 0 ; \
-    fi && \
-    # New Python Libraries:
-    echo "Install pip lazycluster" && \
-    pip install --no-cache-dir \
-                # pyaudio \
-                lazycluster && \
-    # Cleanup
-    clean-layer.sh
-
-### END INCUBATION ZONE ###
-
-### JUPYTER ###
-
-COPY \
-    resources/jupyter/start.sh \
-    resources/jupyter/start-notebook.sh \
-    resources/jupyter/start-singleuser.sh \
-    /usr/local/bin/
-
-# install jupyter extensions
-RUN \
-    # Activate and configure extensions
-    jupyter contrib nbextension install --user && \
-    # nbextensions configurator
-    jupyter nbextensions_configurator enable --user && \
-    # Active nbresuse
-    jupyter serverextension enable --py nbresuse && \
-    # Activate Jupytext
-    jupyter nbextension enable --py jupytext && \
-    # Disable Jupyter Server Proxy
-    jupyter nbextension disable jupyter_server_proxy/tree && \
-    # If minimal flavor - exit here
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        # Cleanup
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
-    # Configure nbdime
-    nbdime config-git --enable --global && \
-    # Enable useful extensions
-    jupyter nbextension enable skip-traceback/main && \
-    # jupyter nbextension enable comment-uncomment/main && \
-    # Do not enable variable inspector: causes trouble: https://github.com/ml-tooling/ml-workspace/issues/10
-    # jupyter nbextension enable varInspector/main && \
-    #jupyter nbextension enable spellchecker/main && \
-    jupyter nbextension enable toc2/main && \
-    jupyter nbextension enable execute_time/ExecuteTime && \
-    jupyter nbextension enable collapsible_headings/main && \
-    jupyter nbextension enable codefolding/main && \
-    # Activate Jupyter Tensorboard
-    jupyter tensorboard enable && \
-    # Edit notebook config
-    echo '{"nbext_hide_incompat": false}' > $HOME/.jupyter/nbconfig/common.json && \
-    cat $HOME/.jupyter/nbconfig/notebook.json | jq '.toc2={"moveMenuLeft": false,"widenNotebook": false,"skip_h1_title": false,"sideBar": true,"number_sections": false,"collapse_to_match_collapsible_headings": true}' > tmp.$$.json && mv tmp.$$.json $HOME/.jupyter/nbconfig/notebook.json && \
-    # If light flavor - exit here
-    if [ "$WORKSPACE_FLAVOR" = "light" ]; then \
-        # Cleanup
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
-    # Activate qgrid
-    jupyter nbextension enable --py --sys-prefix qgrid && \
-    # Activate Colab support
-    jupyter serverextension enable --py jupyter_http_over_ws && \
-    # Activate Voila Rendering 
-    # currently not working jupyter serverextension enable voila --sys-prefix && \
-    # Enable ipclusters
-    ipcluster nbextension enable && \
-    # Fix permissions? fix-permissions.sh $CONDA_DIR && \
-    # Cleanup
-    clean-layer.sh
-
-# install jupyterlab
-RUN \
-    # Required for jupytext and matplotlib plugins
-    jupyter lab build && \
-    # jupyterlab installed in requirements section
-    jupyter labextension install @jupyter-widgets/jupyterlab-manager --no-build && \
-    # If minimal flavor - do not install jupyterlab extensions
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        # Cleanup
-        jupyter lab clean && \
-        jlpm cache clean && \
-        rm -rf $CONDA_DIR/share/jupyter/lab/staging && \
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
-    jupyter labextension install @jupyterlab/toc --no-build && \
-    jupyter labextension install jupyterlab_tensorboard --no-build && \
-    # install jupyterlab git
-    jupyter labextension install @jupyterlab/git --no-build && \
-    pip install jupyterlab-git && \ 
-    jupyter serverextension enable --py jupyterlab_git && \
-    # For Matplotlib: https://github.com/matplotlib/jupyter-matplotlib
-    jupyter labextension install jupyter-matplotlib --no-build && \
-    # Do not install any other jupyterlab extensions
-    if [ "$WORKSPACE_FLAVOR" = "light" ]; then \
-        # Cleanup
-        jupyter lab clean && \
-        jlpm cache clean && \
-        rm -rf $CONDA_DIR/share/jupyter/lab/staging && \
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
-    # Install jupyterlab language server support
-    pip install --pre jupyter-lsp && \
-    jupyter labextension install @krassowski/jupyterlab-lsp --no-build && \
-    # For Plotly
-    jupyter labextension install jupyterlab-plotly --no-build && \
-    jupyter labextension install jupyterlab-chart-editor --no-build && \
-    # For holoview
-    jupyter labextension install @pyviz/jupyterlab_pyviz --no-build && \
-    # Install jupyterlab variable inspector - https://github.com/lckr/jupyterlab-variableInspector
-    jupyter labextension install @lckr/jupyterlab_variableinspector --no-build && \
-    # Install Debugger in Jupyter Lab
-    pip install --no-cache-dir xeus-python && \
-    jupyter labextension install @jupyterlab/debugger && \
-    # Install jupyterlab code formattor - https://github.com/ryantam626/jupyterlab_code_formatter
-    jupyter labextension install @ryantam626/jupyterlab_code_formatter --no-build && \
-    pip install jupyterlab_code_formatter && \
-    jupyter serverextension enable --py jupyterlab_code_formatter && \
-    jupyter lab build && \
-    # Cleanup
-    # Clean jupyter lab cache: https://github.com/jupyterlab/jupyterlab/issues/4930
-    jupyter lab clean && \
-    jlpm cache clean && \
-    # Remove build folder -> should be remove by lab clean as well?
-    rm -rf $CONDA_DIR/share/jupyter/lab/staging && \
-    clean-layer.sh
 
 # Install Jupyter Tooling Extension
 COPY resources/jupyter/extensions $RESOURCES_PATH/jupyter-extensions
@@ -912,63 +546,6 @@ RUN \
 # Install vscode extension
 # https://github.com/cdr/code-server/issues/171
 # Alternative install: /usr/local/bin/code-server --user-data-dir=$HOME/.config/Code/ --extensions-dir=$HOME/.vscode/extensions/ --install-extension ms-python-release && \
-RUN \
-    # If minimal flavor -> exit here
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        exit 0 ; \
-    fi && \
-    cd $RESOURCES_PATH && \
-    mkdir -p $HOME/.vscode/extensions/ && \
-    # Install python extension - (newer versions are 30MB bigger)
-    VS_PYTHON_VERSION="2020.7.96456" && \
-    wget --no-verbose https://github.com/microsoft/vscode-python/releases/download/$VS_PYTHON_VERSION/ms-python-release.vsix && \
-    bsdtar -xf ms-python-release.vsix extension && \
-    rm ms-python-release.vsix && \
-    mv extension $HOME/.vscode/extensions/ms-python.python-$VS_PYTHON_VERSION && \
-    # Install vscode-java: https://github.com/redhat-developer/vscode-java/releases
-    # higher versions do not support vs code 1.39
-    VS_JAVA_VERSION="0.65.0" && \
-    # wget --quiet --no-check-certificate https://github.com/redhat-developer/vscode-java/releases/download/v$VS_JAVA_VERSION/redhat.java-$VS_JAVA_VERSION.vsix && \
-    wget --no-verbose -O redhat.java-$VS_JAVA_VERSION.vsix https://marketplace.visualstudio.com/_apis/public/gallery/publishers/redhat/vsextensions/java/$VS_JAVA_VERSION/vspackage && \
-    bsdtar -xf redhat.java-$VS_JAVA_VERSION.vsix extension && \
-    rm redhat.java-$VS_JAVA_VERSION.vsix && \
-    mv extension $HOME/.vscode/extensions/redhat.java-$VS_JAVA_VERSION && \
-    # If light flavor -> exit here
-    if [ "$WORKSPACE_FLAVOR" = "light" ]; then \
-        exit 0 ; \
-    fi && \
-    # Install git lens: https://github.com/eamodio/vscode-gitlens
-    VS_GITLENS_VERSION="10.2.2" && \
-    wget --no-verbose https://github.com/eamodio/vscode-gitlens/releases/download/v$VS_GITLENS_VERSION/gitlens-$VS_GITLENS_VERSION.vsix && \
-    bsdtar -xf gitlens-$VS_GITLENS_VERSION.vsix extension && \
-    rm gitlens-$VS_GITLENS_VERSION.vsix && \
-    mv extension $HOME/.vscode/extensions/eamodio.gitlens-$VS_GITLENS_VERSION && \
-    # Install code runner: https://github.com/formulahendry/vscode-code-runner/releases/latest
-    VS_CODE_RUNNER_VERSION="0.9.17" && \
-    wget --no-verbose https://github.com/formulahendry/vscode-code-runner/releases/download/$VS_CODE_RUNNER_VERSION/code-runner-$VS_CODE_RUNNER_VERSION.vsix && \
-    bsdtar -xf code-runner-$VS_CODE_RUNNER_VERSION.vsix extension && \
-    rm code-runner-$VS_CODE_RUNNER_VERSION.vsix && \
-    mv extension $HOME/.vscode/extensions/code-runner-$VS_CODE_RUNNER_VERSION && \
-    # Install ESLint extension: https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint
-    # Older versions do not support vscode 1.39 - https://github.com/microsoft/vscode-eslint/
-    VS_ESLINT_VERSION="2.1.8" && \
-    wget --no-verbose https://marketplace.visualstudio.com/_apis/public/gallery/publishers/dbaeumer/vsextensions/vscode-eslint/$VS_ESLINT_VERSION/vspackage -O dbaeumer.vscode-eslint.vsix && \
-    bsdtar -xf dbaeumer.vscode-eslint.vsix extension && \
-    rm dbaeumer.vscode-eslint.vsix && \
-    mv extension $HOME/.vscode/extensions/dbaeumer.vscode-eslint-$VS_ESLINT_VERSION.vsix && \
-    # Install Markdown lint extension: https://marketplace.visualstudio.com/items?itemName=DavidAnson.vscode-markdownlint
-    VS_MARKDOWN_LINT_VERSION="0.36.1" && \
-    wget --no-verbose https://marketplace.visualstudio.com/_apis/public/gallery/publishers/DavidAnson/vsextensions/vscode-markdownlint/$VS_MARKDOWN_LINT_VERSION/vspackage -O davidanson.vscode-markdownlint.vsix && \
-    bsdtar -xf davidanson.vscode-markdownlint.vsix extension && \
-    rm davidanson.vscode-markdownlint.vsix && \
-    mv extension $HOME/.vscode/extensions/davidanson.vscode-markdownlint-$VS_MARKDOWN_LINT_VERSION.vsix && \
-    # Fix permissions
-    fix-permissions.sh $HOME/.vscode/extensions/ && \
-    # Cleanup
-    clean-layer.sh
-
-### END VSCODE ###
-
 
 ### CONFIGURATION ###
 
@@ -1050,11 +627,11 @@ RUN \
 COPY resources/netdata/ /etc/netdata/
 
 # Configure Matplotlib
-RUN \
-    # Import matplotlib the first time to build the font cache.
-    MPLBACKEND=Agg python -c "import matplotlib.pyplot" \
-    # Stop Matplotlib printing junk to the console on first load
-    sed -i "s/^.*Matplotlib is building the font cache using fc-list.*$/# Warning removed/g" $CONDA_PYTHON_DIR/site-packages/matplotlib/font_manager.py
+# RUN \
+#     # Import matplotlib the first time to build the font cache.
+#     MPLBACKEND=Agg python -c "import matplotlib.pyplot" \
+#     # Stop Matplotlib printing junk to the console on first load
+#     sed -i "s/^.*Matplotlib is building the font cache using fc-list.*$/# Warning removed/g" $CONDA_PYTHON_DIR/site-packages/matplotlib/font_manager.py
 
 # Create Desktop Icons for Tooling
 COPY resources/icons $RESOURCES_PATH/icons
@@ -1080,6 +657,14 @@ COPY resources/tutorials $RESOURCES_PATH/tutorials
 COPY resources/licenses $RESOURCES_PATH/licenses
 COPY resources/reports $RESOURCES_PATH/reports
 
+### JUPYTER ###
+
+COPY \
+    resources/jupyter/start.sh \
+    resources/jupyter/start-notebook.sh \
+    resources/jupyter/start-singleuser.sh \
+    /usr/local/bin/
+
 # Various configurations
 RUN \
     touch $HOME/.ssh/config && \
@@ -1093,13 +678,12 @@ RUN \
     chmod a+rwx /usr/local/bin/start-notebook.sh && \
     chmod a+rwx /usr/local/bin/start.sh && \
     chmod a+rwx /usr/local/bin/start-singleuser.sh && \
-    chown root:root /tmp && \
+    chown $NB_USER:$NB_GID /tmp && \
     chmod a+rwx /tmp && \
     # Set /workspace as default directory to navigate to as root user
     echo  'cd '$WORKSPACE_HOME >> $HOME/.bashrc
 
 RUN \
-    chown -R $NB_USER:$NB_GID /var/log && \
     fix-permissions /var/log/supervisor/ & \
     fix-permissions /etc/supervisor/supervisord.conf && \
     fix-permissions /tmp && \
@@ -1108,6 +692,9 @@ RUN \
     chown -R $NB_USER:$NB_GID /usr/local/openresty && \
     chown -R $NB_USER:$NB_GID $HOME && \
     chown -R $NB_USER:$NB_GID /var/log && \
+    chmod -R 777 /var/log && \
+    chmod -R 755  $HOME && \
+    chmod -R 2755 $HOME/.oh-my-zsh && \
     chmod 777 /run && \
     fix-permissions /usr/local/openresty
 
@@ -1204,6 +791,8 @@ LABEL \
 # TODO: VOLUME [ "/workspace" ]
 # TODO: WORKDIR /workspace?
 
+USER $NB_UID
+
 # use global option with tini to kill full process groups: https://github.com/krallin/tini#process-group-killing
 ENTRYPOINT ["tini", "-g", "--"]
 
@@ -1214,7 +803,6 @@ CMD ["python", "/resources/docker-entrypoint.py"]
 # Port 3389 is the RDP port
 # Port 8090 is the Jupyter Notebook Server
 # See supervisor.conf for more ports
-USER $NB_UID
 
 EXPOSE 8080
 WORKDIR $WORKSPACE_HOME
