@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 
 ARG NB_USER="jovyan"
@@ -110,7 +110,7 @@ RUN mkdir /home/$NB_USER/work && \
 ENV PATH=$CONDA_DIR/bin:$PATH
 
 # There is nothing added yet to LD_LIBRARY_PATH, so we can overwrite
-ENV LD_LIBRARY_PATH=$CONDA_DIR/lib 
+ENV LD_LIBRARY_PATH=/usr/lib:/usr/lib/x86_64-linux-gnu:$CONDA_DIR/lib 
 
 ENV MINICONDA_VERSION=4.8.3 \
     MINICONDA_MD5=751786b92c00b1aeae3f017b781018df \
@@ -162,11 +162,9 @@ RUN wget --no-verbose https://repo.anaconda.com/miniconda/Miniconda3-py37_${COND
     clean-layer.sh
 
 # Install Tini
-RUN conda install --quiet --yes 'tini=0.18.0' && \
-    conda list tini | grep tini | tr -s ' ' | cut -d ' ' -f 1,2 >> $CONDA_DIR/conda-meta/pinned && \
-    conda clean --all -f -y && \
-    fix-permissions $CONDA_DIR && \
-    fix-permissions /home/$NB_USER
+ENV TINI_VERSION='0.19.0'
+ADD https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini /tini
+RUN chmod +x /tini
 
 # Install Jupyter Notebook, Lab, and Hub
 # Generate a notebook server config
@@ -265,6 +263,13 @@ ARG _RESTY_CONFIG_OPTIONS="\
     --with-http_sub_module \
     "
 ARG RESTY_CONFIG_OPTIONS=""
+ENV \
+    RESTY_IMAGE_TAG=$RESTY_IMAGE_TAG \
+    RESTY_VERSION=$RESTY_VERSION \
+    RESTY_J=$RESTY_J \
+    _RESTY_CONFIG_OPTIONS=$_RESTY_CONFIG_OPTIONS \
+    RESTY_CONFIG_OPTIONS=$RESTY_CONFIG_OPTIONS
+
 
 RUN \
     apt-get update && \
@@ -281,7 +286,7 @@ RUN \
         unzip \
         bzip2 \
         lzop \
-        bsdtar \
+        libarchive-tools \
         zlibc && \
     OPEN_RESTY_VERSION=${RESTY_VERSION} && \
     mkdir $RESOURCES_PATH"/openresty" && \
@@ -310,6 +315,24 @@ RUN \
     chmod -R a+rwx $RESOURCES_PATH && \
     # Cleanup
     clean-layer.sh
+
+# RuN \
+#    apt-get update && \
+#    # install some prerequisites needed by adding GPG public keys (could be removed later)
+#    apt-get -y install --no-install-recommends wget gnupg ca-certificates lsb-release && \
+#    # import our GPG key:
+#    wget -O - https://openresty.org/package/pubkey.gpg | sudo apt-key add - && \
+#    # add the our official APT repository:
+#    echo "deb http://openresty.org/package/ubuntu $(lsb_release -sc) main" \
+#        | sudo tee /etc/apt/sources.list.d/openresty.list && \
+#    # to update the APT index:
+#    apt-get update && \
+#    # install a package
+#    apt-get -y install openresty && \
+#        # Cleanup
+#    clean-layer.sh
+
+
 
 ENV PATH=/usr/local/openresty/nginx/sbin:$PATH
 
@@ -348,7 +371,8 @@ RUN \
     mkdir -p /var/run/sshd && chmod 400 /var/run/sshd && \
     # Install rsyslog for syslog logging
     apt-get install -y --no-install-recommends rsyslog && \
-    pip install --no-cache-dir --upgrade supervisor supervisor-stdout && \
+    apt-get install -y cron && \
+    pip install --no-cache-dir --upgrade supervisor python-crontab && \
     # supervisor needs this logging path
     mkdir -p /var/log/supervisor/ && \
     # Cleanup
@@ -359,12 +383,14 @@ RUN \
 ### GUI TOOLS ###
 # Install VNC
 RUN \
-    apt-get update  && \
+    apt-get update && \
     # required for websockify
-    # apt-get install -y python-numpy  && \
+    conda install -y numpy  && \
     cd ${RESOURCES_PATH} && \
     # Tiger VNC
+    # apt install -y tigervnc-standalone-server && \
     wget -qO- https://dl.bintray.com/tigervnc/stable/tigervnc-1.10.1.x86_64.tar.gz | tar xz --strip 1 -C / && \
+    # wget -qO- https://bintray.com/tigervnc/beta/download_file?file_path=tigervnc-1.10.90.x86_64.tar.gz | tar xz --strip 1 -C / && \
     # Install websockify
     mkdir -p ./novnc/utils/websockify && \
     # Before updating the noVNC version, we need to make sure that our monkey patching scripts still work!!
@@ -458,6 +484,7 @@ RUN \
 COPY resources/tools/netdata.sh $RESOURCES_PATH/tools/netdata.sh
 RUN \
     /bin/bash $RESOURCES_PATH/tools/netdata.sh --install && \
+    fix-permissions /var/lib/netdata &&\
     # Cleanup
     clean-layer.sh
 
@@ -536,6 +563,7 @@ RUN \
     # conda init bash && \
     conda init zsh && \
     chsh -s $(which zsh) $NB_USER && \
+    apt install -y zip && \
     # Install sdkman - needs to be executed after zsh
     curl -s https://get.sdkman.io | bash && \
     # Cleanup
@@ -685,6 +713,9 @@ RUN \
 
 RUN \
     fix-permissions /var/log/supervisor/ & \
+    # fix-permissions /etc/ssh &&\
+    # fix-permissions /dev &&\
+    # fix-permissions /usr/sbin/cron  &&\
     fix-permissions /etc/supervisor/supervisord.conf && \
     fix-permissions /tmp && \
     fix-permissions $HOME && \
@@ -791,10 +822,11 @@ LABEL \
 # TODO: VOLUME [ "/workspace" ]
 # TODO: WORKDIR /workspace?
 
+# Switch back to jovyan to avoid accidental container runs as root
 USER $NB_UID
 
 # use global option with tini to kill full process groups: https://github.com/krallin/tini#process-group-killing
-ENTRYPOINT ["tini", "-g", "--"]
+ENTRYPOINT ["/tini", "-g", "--"]
 
 CMD ["python", "/resources/docker-entrypoint.py"] 
 

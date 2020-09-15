@@ -21,6 +21,8 @@ from tornado import web
 SHARED_SSH_SETUP_PATH = "/shared/ssh/setup"
 HOME = os.getenv("HOME", "/root")
 RESOURCES_PATH = os.getenv("RESOURCES_PATH", "/resources")
+USER_RUNTIME = os.getenv("USER", "root")
+
 
 # -------------- HANDLER -------------------------
 class HelloWorldHandler(IPythonHandler):
@@ -605,6 +607,7 @@ def get_setup_script(hostname: str = None, port: str = None):
         .replace("{HOSTNAME_RUNTIME}", HOSTNAME_RUNTIME) \
         .replace("{RUNTIME_KNOWN_HOST_ENTRY}", local_keyscan_entry) \
         .replace("{PORT_RUNTIME}", str(PORT_RUNTIME)) \
+        .replace("{USER_RUNTIME}", USER_RUNTIME) \
         .replace("{RUNTIME_CONFIG_NAME}", RUNTIME_CONFIG_NAME) \
         .replace("{RUNTIME_KEYSCAN_NAME}", local_keyscan_replacement.replace("[", "\[").replace("]", "\]"))
 

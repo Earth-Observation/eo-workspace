@@ -18,9 +18,36 @@ touch $HOME/.vnc/passwd
 echo "$VNC_PW" | vncpasswd -f >> $HOME/.vnc/passwd
 chmod 600 $HOME/.vnc/passwd
 
+# create xstartup
+XSTARTUP_FILE="${HOME}/.vnc/xstartup"
+if [[ ! -f "${XSTARTUP_FILE}" ]] ; then
+    echo ; echo "Preparing VNC server configuration files ..."
+    vncserver "${DISPLAY}"
+    vncserver -kill "${DISPLAY}"
+    echo "Saving default startup script as ${XSTARTUP_FILE}.old"
+    cp "${XSTARTUP_FILE}" "${XSTARTUP_FILE}.old"
+    echo "Replacing default startup script ${XSTARTUP_FILE}"
+    cat <<'EOF' > "${XSTARTUP_FILE}"
+#!/bin/sh
+
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+
+# XFCE
+[ -x /etc/vnc/xstartup ] && exec /etc/vnc/xstartup
+[ -r $HOME/.Xresources ] && xrdb $HOME/.Xresources
+xsetroot -solid grey
+vncconfig -iconic &
+#       xfce4-session &
+startxfce4 &
+
+EOF
+fi
+
+
 # Setting pidfile + command to execute
 pidfile="$HOME/.vnc/*:1.pid"
-command="/usr/bin/vncserver $DISPLAY -geometry $VNC_RESOLUTION -depth $VNC_COL_DEPTH -name Desktop-GUI -autokill"
+command="/usr/bin/vncserver $DISPLAY -geometry $VNC_RESOLUTION -depth $VNC_COL_DEPTH -name Desktop-GUI"
 
 # Proxy signals
 function kill_app(){
