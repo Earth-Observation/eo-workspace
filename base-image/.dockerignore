@@ -1,5 +1,10 @@
 *
 !resources/
+!fix-permissions
+!jupyter_server_config.py
+!start-notebook.sh
+!start-singleuser.sh
+!start.sh
 **/.DS_Store
 **/Thumbs.db
 **/*.pyc
