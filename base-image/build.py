@@ -4,29 +4,38 @@ import argparse
 import datetime
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--name', help='base name of docker container', default="ml-workspace")
-parser.add_argument('--version', help='version tag of docker container', default="latest")
-parser.add_argument('--deploy', help='deploy docker container to remote', action='store_true')
-parser.add_argument('--flavor', help='flavor (base) used for docker container', default='base')
+parser.add_argument(
+    "--name", help="base name of docker container", default="eo-workspace"
+)
+parser.add_argument(
+    "--version", help="version tag of docker container", default="latest"
+)
+parser.add_argument(
+    "--deploy", help="deploy docker container to remote", action="store_true"
+)
+parser.add_argument(
+    "--flavor", help="flavor (base) used for docker container", default="base"
+)
 
 REMOTE_IMAGE_PREFIX = "imansour/"
 
 args, unknown = parser.parse_known_args()
 if unknown:
-    print("Unknown arguments "+str(unknown))
+    print("Unknown arguments " + str(unknown))
 
 # Wrapper to print out command
 def call(command):
-    print("Executing: "+command)
+    print("Executing: " + command)
     return subprocess.call(command, shell=True)
+
 
 # calls build scripts in every module with same flags
 def build(module="."):
-    
+
     if not os.path.isdir(module):
         print("Could not find directory for " + module)
         sys.exit(1)
-    
+
     build_command = "python build.py"
 
     if args.version:
@@ -34,17 +43,20 @@ def build(module="."):
 
     if args.deploy:
         build_command += " --deploy"
- 
+
     if args.flavor:
         build_command += " --flavor=" + str(args.flavor)
 
     working_dir = os.path.dirname(os.path.realpath(__file__))
-    full_command = "cd " + module + " && " + build_command + " && cd " + working_dir
+    full_command = (
+        "cd " + module + " && " + build_command + " && cd " + working_dir
+    )
     print("Building " + module + " with: " + full_command)
     failed = call(full_command)
     if failed:
         print("Failed to build module " + module)
         sys.exit(1)
+
 
 if not args.flavor:
     args.flavor = "base"
@@ -72,13 +84,21 @@ service_name += "-" + args.flavor
 # docker build
 git_rev = "unknown"
 try:
-    git_rev = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode('ascii').strip()
+    git_rev = (
+        subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
+        .decode("ascii")
+        .strip()
+    )
 except:
     pass
 
 build_date = datetime.datetime.utcnow().isoformat("T") + "Z"
 try:
-    build_date = subprocess.check_output(['date', '-u', '+%Y-%m-%dT%H:%M:%SZ']).decode('ascii').strip()
+    build_date = (
+        subprocess.check_output(["date", "-u", "+%Y-%m-%dT%H:%M:%SZ"])
+        .decode("ascii")
+        .strip()
+    )
 except:
     pass
 
@@ -87,10 +107,23 @@ build_date_build_arg = " --build-arg ARG_BUILD_DATE=" + str(build_date)
 flavor_build_arg = " --build-arg ARG_WORKSPACE_FLAVOR=" + str(args.flavor)
 version_build_arg = " --build-arg ARG_WORKSPACE_VERSION=" + str(args.version)
 
-versioned_image = service_name+":"+str(args.version)
-latest_image = service_name+":latest"
-failed = call("docker build -t "+ versioned_image + " -t " + latest_image + " " 
-            + version_build_arg + " " + flavor_build_arg+ " " + vcs_ref_build_arg + " " + build_date_build_arg + " ./")
+versioned_image = service_name + ":" + str(args.version)
+latest_image = service_name + ":latest"
+failed = call(
+    "docker build -t "
+    + versioned_image
+    + " -t "
+    + latest_image
+    + " "
+    + version_build_arg
+    + " "
+    + flavor_build_arg
+    + " "
+    + vcs_ref_build_arg
+    + " "
+    + build_date_build_arg
+    + " ./"
+)
 
 if failed:
     print("Failed to build container")
@@ -106,5 +139,5 @@ if args.deploy:
     call("docker push " + remote_versioned_image)
 
     if "SNAPSHOT" not in args.version:
-    # do not push SNAPSHOT builds as latest version
+        # do not push SNAPSHOT builds as latest version
         call("docker push " + remote_latest_image)
