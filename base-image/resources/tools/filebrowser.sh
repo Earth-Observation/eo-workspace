@@ -16,15 +16,16 @@ done
 
 if [ ! -f "/usr/local/bin/filebrowser"  ]; then
     echo "Installing Filebrowser. Please wait..."
-    mkdir -p $RESOURCES_PATH/filebrowser
-    cd $RESOURCES_PATH/filebrowser
-    # TODO: the 2.1.0 version does not work currently
-    wget -q https://github.com/filebrowser/filebrowser/releases/download/v2.5.0/linux-amd64-filebrowser.tar.gz -O ./filebrowser.tar.gz
-    tar -xzf ./filebrowser.tar.gz
-    chmod +x "./filebrowser"
-    mv "./filebrowser" "/usr/local/bin/filebrowser"
-    cd $RESOURCES_PATH
-    rm -r $RESOURCES_PATH/filebrowser
+    # mkdir -p $RESOURCES_PATH/filebrowser
+    # cd $RESOURCES_PATH/filebrowser
+    # FILEBROWSER_VERSION=2.15.0
+    # wget -q https://github.com/filebrowser/filebrowser/releases/download/v$FILEBROWSER_VERSION/linux-amd64-filebrowser.tar.gz -O ./filebrowser.tar.gz
+    # tar -xzf ./filebrowser.tar.gz
+    # chmod +x "./filebrowser"
+    # mv "./filebrowser" "/usr/local/bin/filebrowser"
+    # cd $RESOURCES_PATH
+    # rm -r $RESOURCES_PATH/filebrowser
+    curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 else
     echo "Filebrowser is already installed"
 fi

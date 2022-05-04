@@ -21,7 +21,7 @@ if [ ! -f "/usr/local/bin/code-server"  ]; then
     # VS_CODE_VERSION=$CODE_SERVER_VERSION-vsc1.41.1
     # wget -q https://github.com/cdr/code-server/releases/download/$CODE_SERVER_VERSION/code-server$VS_CODE_VERSION-linux-x86_64.tar.gz -O ./vscode-web.tar.gz
     # Use older version, since newer has some problems with python extension
-    VS_CODE_VERSION=3.4.1
+    VS_CODE_VERSION=4.2.0
     wget -q https://github.com/cdr/code-server/releases/download/v$VS_CODE_VERSION/code-server_${VS_CODE_VERSION}_amd64.deb -O ./code-server.deb 
     apt-get update
     apt-get install -y ./code-server.deb

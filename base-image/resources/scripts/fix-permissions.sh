@@ -1,9 +1,8 @@
 #!/bin/bash
-# Based on: https://github.com/jupyter/docker-stacks/blob/master/base-notebook/fix-permissions
 # set permissions on a directory
 # after any installation, if a directory needs to be (human) user-writable,
 # run this script on it.
-# It will make everything in the directory owned by the group with $USER_GID
+# It will make everything in the directory owned by the group ${NB_GID}
 # and writable by that group.
 # Deployments that want to set a specific user id can preserve permissions
 # by adding the `--group-add users` line to `docker run`.
@@ -12,31 +11,25 @@
 # which would cause massive image explosion
 
 # right permissions are:
-# group=$USER_GID
+# group=${NB_GID}
 # AND permissions include group rwX (directory-execute)
 # AND directories have setuid,setgid bits set
 
-# Exit immediately if a command exits with a non-zero status.
 set -e
 
-if [ -z "$NB_GID" ]; then
-    echo "Please set a user GID via USER_GID env varibale."
-    exit 1
-fi
-
-for d in $@; do
-  find "$d" \
-    ! \( \
-      -group $NB_GID \
-      -a -perm -g+rwX  \
-    \) \
-    -exec chgrp $NB_GID {} \; \
-    -exec chmod g+rwX {} \;
-  # setuid,setgid *on directories only*
-  find "$d" \
-    \( \
-        -type d \
-        -a ! -perm -6000  \
-    \) \
-    -exec chmod +6000 {} \;
+for d in "$@"; do
+    find "${d}" \
+        ! \( \
+            -group "${NB_GID}" \
+            -a -perm -g+rwX \
+        \) \
+        -exec chgrp "${NB_GID}" {} \; \
+        -exec chmod g+rwX {} \;
+    # setuid, setgid *on directories only*
+    find "${d}" \
+        \( \
+            -type d \
+            -a ! -perm -6000 \
+        \) \
+        -exec chmod +6000 {} \;
 done

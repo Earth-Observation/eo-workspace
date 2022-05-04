@@ -19,10 +19,6 @@ log = logging.getLogger(__name__)
 
 HOME = os.getenv("HOME", "/root")
 RESOURCE_FOLDER = os.getenv('RESOURCES_PATH')
-NB_USER = os.getenv("NB_USER", "root")
-NB_UID = os.getenv("NB_UID", "0")
-# Allow to run the script as a user based on UID to change permissions of ssh config
-os.setuid(int(NB_UID))
 
 # Export environment for ssh sessions
 #call("printenv > $HOME/.ssh/environment", shell=True)

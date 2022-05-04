@@ -8,10 +8,15 @@
 # At the end of each command, we should ensure we clean up downloaded
 # archives and source files used to produce binary to reduce the size
 # of the layer.
-set -e
+
+# Disable exit on error
+set +e
+# Show all commands
 set -x
 
-# Delete old downloaded archive files 
+echo "Running layer cleanup script..."
+
+# Delete old downloaded archive files
 apt-get autoremove -y
 # Delete downloaded archive files
 apt-get clean
@@ -19,13 +24,15 @@ apt-get clean
 rm -rf /usr/local/src/*
 # Delete cache and temp folders
 rm -rf /tmp/* /var/tmp/* $HOME/.cache/* /var/cache/apt/*
+# Fix permissions on tmp directory
+chmod 1777 /tmp
 # Remove apt lists
 rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/*
 
 # Clean conda
 if [ -x "$(command -v conda)" ]; then
     # Full Conda Cleanup
-    conda clean --all -f -y
+    mamba clean --all -f -y
     # Remove source cache files
     conda build purge-all
     if [ -d $CONDA_DIR ]; then
@@ -40,3 +47,14 @@ if [ -x "$(command -v npm)" ]; then
     npm cache clean --force
     rm -rf $HOME/.npm/* $HOME/.node-gyp/*
 fi
+
+# Clean yarn
+if [ -x "$(command -v yarn)" ]; then
+    yarn cache clean --all
+    rm -rf "/home/${NB_USER}/.cache/yarn" 
+fi
+
+# pip is cleaned by the rm -rf $HOME/.cache/* commmand above
+
+# Always exit without error
+exit 0

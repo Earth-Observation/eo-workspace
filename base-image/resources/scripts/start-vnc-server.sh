@@ -11,57 +11,49 @@
 
 set -eu
 
+# Set default values for vnc settings if not provided
+VNC_PW=${VNC_PW:-"vncpassword"}
+VNC_RESOLUTION=${VNC_RESOLUTION:-"1600x900"}
+VNC_COL_DEPTH=${VNC_COL_DEPTH:-"24"}
+
 mkdir -p $HOME/.vnc
 touch $HOME/.vnc/passwd
 
 # Set password:
-echo "$VNC_PW" | vncpasswd -f >> $HOME/.vnc/passwd
-chmod 600 $HOME/.vnc/passwd
+# echo "$VNC_PW" | vncpasswd -f >> $HOME/.vnc/passwd
+# chmod 600 $HOME/.vnc/passwd
+python /resources/scripts/vncrun.py
 
-# create xstartup
-XSTARTUP_FILE="${HOME}/.vnc/xstartup"
-if [[ ! -f "${XSTARTUP_FILE}" ]] ; then
-    echo ; echo "Preparing VNC server configuration files ..."
-    vncserver "${DISPLAY}"
-    vncserver -kill "${DISPLAY}"
-    echo "Saving default startup script as ${XSTARTUP_FILE}.old"
-    cp "${XSTARTUP_FILE}" "${XSTARTUP_FILE}.old"
-    echo "Replacing default startup script ${XSTARTUP_FILE}"
-    cat <<'EOF' > "${XSTARTUP_FILE}"
-#!/bin/sh
-
-unset SESSION_MANAGER
-unset DBUS_SESSION_BUS_ADDRESS
-
-# XFCE
-[ -x /etc/vnc/xstartup ] && exec /etc/vnc/xstartup
-[ -r $HOME/.Xresources ] && xrdb $HOME/.Xresources
-xsetroot -solid grey
-vncconfig -iconic &
-#       xfce4-session &
-startxfce4 &
-
-EOF
-fi
-
-
-# Setting pidfile + command to execute
-pidfile="$HOME/.vnc/*:1.pid"
-command="/usr/bin/vncserver $DISPLAY -geometry $VNC_RESOLUTION -depth $VNC_COL_DEPTH -name Desktop-GUI"
+config_file=$HOME/.vnc/config
+touch $config_file
+printf "geometry=$VNC_RESOLUTION\ndepth=$VNC_COL_DEPTH\ndesktop=Desktop-GUI\nsession=xfce" > ~/.vnc/config
+command="/opt/TurboVNC/bin/vncserver $DISPLAY"
 
 # Proxy signals
 function kill_app(){
     # correct forwarding of shutdown signal
-    kill -s SIGTERM $!
+    _wait_pid=$!
+    kill -s SIGTERM $_wait_pid
     trap - SIGTERM && kill -- -$$
-    kill $(cat $pidfile)
+    if [ -n "$(pidof xinit)" ] ; then
+        ### ignore the errors if not alive any more
+        kill $(pidof xinit) > /dev/null 2>&1
+    fi
     exit 0 # exit okay
 }
-trap "kill_app" SIGINT SIGTERM EXIT
+trap "kill_app" SIGINT SIGTERM SIGQUIT EXIT
 
-#cleanup tmp from previous run 
-# run vncserver kill in background
-vncserver -kill $DISPLAY &
+# Old way: is not supported in tiger vnc 11
+# /usr/libexec/vncserver -kill $DISPLAY &
+
+# Kill vnc server via the xinit script
+# init_pid="$(pidof xinit)"
+if [ -n "$(pidof xinit)" ] ; then
+    ### ignore the errors if not alive any more
+    kill $(pidof xinit) > /dev/null 2>&1
+fi
+
+#cleanup tmp from previous run
 rm -rfv /tmp/.X*-lock /tmp/.x*-lock /tmp/.X11-unix
 # Delete existing logs
 find $HOME/.vnc/ -name '*.log' -delete
@@ -70,19 +62,23 @@ find $HOME/.vnc/ -name '*.log' -delete
 # Launch daemon
 
 sleep 1
-$command
-sleep 4
+$command &> "$HOME/.vnc/vnc.log" &
+sleep 5
 
-tail -f -q --pid $(cat $pidfile) $HOME/.vnc/*.log &
+_wait_pid=$!
+
+echo "Started VNC Server $_wait_pid"
+
+tail -f -q --pid $_wait_pid $HOME/.vnc/*.log &
 
 # Disable screensaver and power management - needs to run after the vnc server is started
-xset -dpms && xset s noblank && xset s off
+xset s noblank && xset s off
+# dpms option not available: xset -display :1 -dpms &&
 
 # Loop while the pidfile and the process exist
 echo "Starting monitoring pid file for vnc server"
-while [ -f $pidfile ] && kill -0 $(cat $pidfile) ; do
+while kill -0 $_wait_pid ; do
     sleep 1
 done
-
 
 exit 1000 # exit unexpected
